@@ -10,14 +10,19 @@ static file_content read_file(const char *filename)
     FILE *file = fopen(filename, "rb");
     if (!file) ERR("open file");
 
-    fseek(file, SEEK_END, 0);
+    fseek(file, 0, SEEK_END);
     size_t size = (size_t) ftell(file);
-    fseek(file, SEEK_SET, 0);
+    fseek(file, 0, SEEK_SET);
+
+    char *buf = malloc(size);
+    if (!buf) ERR("buf malloc");
+
+    size_t read = fread(buf, 1, size, file);
+    if (read != size) ERR("read file");
 
     file_content result = {};
+    result.buf = buf;
     result.size = size;
-    size_t read = fread(result.buf, 1, size, file);
-    if (read != size) ERR("read file");
 
     return result;
 }
