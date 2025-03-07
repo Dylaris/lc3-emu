@@ -28,11 +28,13 @@ typedef uint16_t u16;
 
 #define EXEC_OK   0
 #define EXEC_FAIL 1
+#define EXEC_END  2
 
 typedef struct lc3 {
     u16 ram[RAM_SIZE];
     u16 r[8], pc, psr;
     u16 *sp;
+    u16 _size; // program size 
 } lc3;
 
 lc3 *vm_new(const char *buf, size_t size);

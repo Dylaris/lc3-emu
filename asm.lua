@@ -26,13 +26,33 @@ local op_tbl = {
 -- translation
 local asm = {
     t_add = function (flag, dr, sr1, sr2, imm5)
-        if flag then
-            return ((op_tbl["add"] << 12) | (dr << 9) | (sr1 << 6) | (1 << 5) | (imm5 << 0))
+        if flag == 1 then
+            table.insert(codes, ((op_tbl["add"] << 12) |
+                (dr << 9) | (sr1 << 6) | (1 << 5) | (imm5 << 0)))
         else
-            return ((op_tbl["add"] << 12) | (dr << 9) | (sr1 << 6) | (0 << 3) | (sr2 << 0))
+            table.insert(codes, ((op_tbl["add"] << 12) |
+                (dr << 9) | (sr1 << 6) | (0 << 3) | (sr2 << 0)))
         end
-    end
+    end,
+
+    t_and = function (flag, dr, sr1, sr2, imm5)
+        if flag == 1 then
+            table.insert(codes, ((op_tbl["and"] << 12) |
+                (dr << 9) | (sr1 << 6) | (1 << 5) | (imm5 << 0)))
+        else
+            table.insert(codes, ((op_tbl["and"] << 12) |
+                (dr << 9) | (sr1 << 6) | (0 << 3) | (sr2 << 0)))
+        end
+    end,
 }
+
+local function get_reg_id(reg)
+    return tonumber(string.match(reg, "r(%d+)"))
+end
+
+local function get_imm(imm)
+    return tonumber(string.match(imm, "(%d+)"))
+end
 
 local function parse_inst(inst)
     if not op_tbl[inst.opcode] then
@@ -40,11 +60,28 @@ local function parse_inst(inst)
         os.exit(1)
     end
 
-    -- debug
+    --[[ debug
     print("opcode: " .. inst.opcode)
     print("operands: ")
     for idx, operand in ipairs(inst.operands) do
         print("", idx, operand)
+    end
+    --]]
+
+    if inst.opcode == "add" then
+        local dr   = get_reg_id(inst.operands[1])
+        local sr1  = get_reg_id(inst.operands[2])
+        local sr2  = get_reg_id(inst.operands[3])
+        local flag = (sr2 == nil) and 1 or 0
+        local imm5 = (sr2 == nil) and get_imm(inst.operands[3]) or nil
+        asm.t_add(flag, dr, sr1, sr2, imm5)
+    elseif inst.opcode == "and" then
+        local dr   = get_reg_id(inst.operands[1])
+        local sr1  = get_reg_id(inst.operands[2])
+        local sr2  = get_reg_id(inst.operands[3])
+        local flag = (sr2 == nil) and 1 or 0
+        local imm5 = (sr2 == nil) and get_imm(inst.operands[3]) or nil
+        asm.t_and(flag, dr, sr1, sr2, imm5)
     end
 end
 
@@ -71,12 +108,18 @@ local function run()
     end
 
     local file = assert(io.open(arg[1], "r"))
-
     for line in file:lines() do
         if line and line ~= "" then
             parse_line(line)
         end
     end
+    file:close()
+
+    file = assert(io.open("op.out", "wb"))
+    for _, code in ipairs(codes) do
+        file:write(string.char((code >> 0) & 0xFF, (code >> 8) & 0xFF))
+    end
+    file:close()
 end
 
 run()

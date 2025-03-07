@@ -20,6 +20,7 @@ lc3 *vm_new(const char *prog, size_t size)
     memset(vm->ram, 0, sizeof(vm->ram));
     memcpy(vm->ram + PROG_LOAD_ADDR, prog, size);
     for (int i = 0; i < 8; i++) vm->r[i] = 0;
+    vm->_size = (size - 1) / 2 + 1;
     vm->pc = PROG_LOAD_ADDR;
     vm->psr = 0x8001;
     vm->sp = &vm->r[6];
@@ -70,6 +71,9 @@ static void op_and(lc3 *vm, u16 inst)
 
 int vm_exec(lc3 *vm)
 {
+    if (vm->pc >= vm->_size + PROG_LOAD_ADDR)
+        return EXEC_END;
+
     u16 inst = vm->ram[vm->pc++]; 
     u8 opcode = FIELD(inst, 15, 12);
 
