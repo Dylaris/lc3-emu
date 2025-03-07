@@ -32,7 +32,7 @@ int main(int argc, char **argv)
     if (argc != 2) ERR("<USE>: ./lc3-vm program");
 
     file_content prog = read_file(argv[1]);
-    lc3 *vm = new_vm(prog.buf, prog.size);
+    lc3 *vm = vm_new(prog.buf, prog.size);
 
     free(vm);
     exit(0);

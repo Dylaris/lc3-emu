@@ -7,7 +7,6 @@
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
-typedef unsigned int uint;
 
 /*
  * Memory map
@@ -27,13 +26,17 @@ typedef unsigned int uint;
 
 #define PROG_LOAD_ADDR UM_OFF
 
+#define EXEC_OK   0
+#define EXEC_FAIL 1
+
 typedef struct lc3 {
     u16 ram[RAM_SIZE];
     u16 r[8], pc, psr;
     u16 *sp;
 } lc3;
 
-lc3 *new_vm(const char *buf, size_t size);
+lc3 *vm_new(const char *buf, size_t size);
+int vm_exec(lc3 *vm);
 
 #define ERR(msg) do { \
         fprintf(stderr, "error: %s at %d in %s\n", msg, __LINE__, __FILE__); \
