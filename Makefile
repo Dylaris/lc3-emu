@@ -1,9 +1,9 @@
-DEBUG = 
+_DEBUG = 
 
 lc3-vm: main.c lc3.c
-	gcc -std=c99 -Wall -Wextra $(DEBUG) main.c lc3.c -o lc3-vm
+	gcc -std=c99 -Wall -Wextra $(_DEBUG) main.c lc3.c -o lc3-vm
 
-debug: DEBUG = -g
+debug: _DEBUG = -g -DDEBUG -lcriterion
 debug: lc3-vm
 
 clean: 

@@ -34,6 +34,8 @@ int main(int argc, char **argv)
     file_content prog = read_file(argv[1]);
     lc3 *vm = vm_new(prog.buf, prog.size);
 
+    while (vm_exec(vm) != EXEC_END);
+
     free(vm);
-    exit(0);
+    return 0;
 }
