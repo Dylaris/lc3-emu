@@ -7,7 +7,7 @@ lc3 use 16-bit addressable memory with a 2^16 location address space.
 
 It means the computer has totally 2^17 bytes memory and each address space is 2 bytes.
 
-![memory map](res/mem_map.png)
+![memory map](./res/mem_map.png)
 
 ### Register
 - 8 16-bit registers (R0-R7) for general purpose
@@ -27,15 +27,25 @@ R6 is stack pointer and there are two stacks
 - PSR[15] = 0 -> SP is SSP (supervisor stack)
 - PSR[15] = 1 -> SP is USP (user stack)
 
-
 ### Input/Output
 lc3's I/O is based in memory-mapped I/O. The I/O device registers specifically for input/output is mapped into memory and you can access these registers through accessing the mapped memory. 
+
+- memory-mapped I/O device register
+    - 0xFE00 -> KBSR (keyboard status register)
+    - 0xFE02 -> KBDR (keyboard data register)
+    - 0xFE04 -> DSR (display status register)
+    - 0xFE06 -> DDR (display data register)
+    - 0xFFFE -> MCR (machine control register)
+
 ### Instruction Set
 lc3 defines 15 16-bit instructions and 4-bit(high) opcode.
 
 It is a load-store architecture, which means values in memory must be load into register before operating.
 
-![isa](res/isa.png)
+![isa](./res/isa.png)
+
+### Trap Service Routines
+
 
 ## Reference
-[lcs-isa](res/lc3-isa.pdf)
+[lcs-isa](./res/lc3-isa.pdf)

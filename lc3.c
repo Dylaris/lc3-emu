@@ -28,6 +28,16 @@
 #define OP_LEA  0xE // 1110
 #define OP_TRAP 0xF // 1111
 
+/* trap vector */
+enum tv {
+    TV_GETC = 0x20,
+    TV_OUT,
+    TV_PUTS,
+    TV_IN,
+    TV_PUTSP,
+    TV_HALT
+};
+
 lc3 *vm_new(const char *prog, size_t size)
 {
     lc3 *vm = malloc(sizeof(lc3));
@@ -165,7 +175,7 @@ static void op_not(lc3 *vm, u16 inst)
 static void op_rti(lc3 *vm, u16)
 {
     if (BIT(vm->psr, 15)) // user mode
-        ERR("error: rti (a privilege mode violation exception)");
+        ERR("rti (a privilege mode violation exception)");
 
     // supervisor mode
     vm->pc = *vm->sp;
@@ -201,18 +211,83 @@ static void op_str(lc3 *vm, u16 inst)
     vm->ram[addr] = sr;
 }
 
+/* trap service routines (tsr) */
+static void tsr_getc(lc3 *vm)
+{
+    u16 ch = fgetc(stdin);
+    vm->r[0] = ch & 0xFF;
+    *vm->kbsr |= 0x8000;
+    *vm->kbdr = ch & 0xFF;
+}
+
+static void tsr_out(lc3 *vm)
+{
+    u16 ch = vm->r[0] & 0xFF;
+    fputc(ch, stdout);
+}
+
+static void tsr_in(lc3 *vm)
+{
+    fputs("Enter character: ", stdout);
+    u16 ch = fgetc(stdin);
+    fputc(ch, stdout);
+    vm->r[0] = ch & 0xFF;
+    *vm->kbsr |= 0x8000;
+    *vm->kbdr = ch & 0xFF;
+}
+
+static void tsr_halt(lc3 *)
+{
+    exit(0);
+    fputs("Halt......", stdout);
+    fgetc(stdin);
+}
+
+static void tsr_puts(lc3 *vm)
+{
+    u16 addr = vm->r[0];
+    u16 ch;
+    while ((ch = vm->ram[addr++]) != 0)
+        fputc(ch, stdout);
+}
+
+static void tsr_putsp(lc3 *vm)
+{
+    u16 addr = vm->r[0];
+    u16 ch;
+    while (1) {
+        ch = FIELD(vm->r[addr], 7, 0);
+        if (ch == 0) break;
+        fputc(ch, stdout);
+        ch = FIELD(vm->r[addr], 15, 8);
+        if (ch == 0) break;
+        fputc(ch, stdout);
+        addr++;
+    }
+}
+
 static void op_trap(lc3 *vm, u16 inst)
 {
     vm->r[7] = vm->pc;
     u16 trapvect = FIELD(inst, 7, 0);
-    u16 addr = ZEXT(trapvect, 8);
-    vm->pc = vm->ram[addr];
+
+    switch (trapvect) {
+    case TV_GETC:  tsr_getc(vm);  break;
+    case TV_OUT:   tsr_out(vm);   break;
+    case TV_IN:    tsr_in(vm);    break;
+    case TV_HALT:  tsr_halt(vm);  break;
+    case TV_PUTS:  tsr_puts(vm);  break;
+    case TV_PUTSP: tsr_putsp(vm); break;
+    default: ERR("invalid trap vector");
+    }
 }
 
 int vm_exec(lc3 *vm)
 {
     if (vm->pc >= vm->_size + PROG_LOAD_ADDR)
         return EXEC_END;
+
+    *vm->kbsr &= 0x7FFF;
 
     u16 inst = vm->ram[vm->pc++]; 
     u8 opcode = FIELD(inst, 15, 12);
@@ -233,7 +308,7 @@ int vm_exec(lc3 *vm)
     case OP_STI:  op_sti(vm, inst);  break;
     case OP_STR:  op_str(vm, inst);  break;
     case OP_TRAP: op_trap(vm, inst); break;
-    default: ERR("error: invalid opcode");
+    default: ERR("invalid opcode");
     }
 
     return EXEC_OK;
