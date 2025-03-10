@@ -5,6 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <unistd.h>
+#include <termios.h>
+#include <sys/select.h>
+
 typedef uint8_t  u8;
 typedef uint16_t u16;
 
@@ -49,7 +53,7 @@ typedef struct lc3 {
     u16 *kbsr, *kbdr, *dsr, *ddr, *mcr;
 } lc3;
 
-lc3 *vm_new(const char *buf, size_t size);
+lc3 *vm_new(const char *buf, size_t size, u16 start_pc);
 int vm_exec(lc3 *vm);
 
 #define ERR(msg) do { \

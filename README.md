@@ -37,6 +37,10 @@ lc3's I/O is based in memory-mapped I/O. The I/O device registers specifically f
     - 0xFE06 -> DDR (display data register)
     - 0xFFFE -> MCR (machine control register)
 
+There is one point that we should check io data when we read memory every time because we don't know whether the address is these mapped address.
+
+And make sure you are in raw mode which means disable line buffering (send data when pressing enter key).
+
 ### Instruction Set
 lc3 defines 15 16-bit instructions and 4-bit(high) opcode.
 
@@ -45,7 +49,6 @@ It is a load-store architecture, which means values in memory must be load into 
 ![isa](./res/isa.png)
 
 ### Trap Service Routines
-
 
 ## Reference
 [lcs-isa](./res/lc3-isa.pdf)

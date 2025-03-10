@@ -6,9 +6,9 @@
 #define SEXT(i, n)     (((i) & (1 << ((n) - 1))) ? ((i) | (0xFFFF << (n))) : ((i) & ((1 << (n)) - 1))) // sign extend
 #define ZEXT(i, n)     ((i) & ((1 << (n)) - 1)) // zero extend
 
-#define NEGATIVE 0xFFFC // psr[2:0] = 100
-#define ZERO     0xFFFA // psr[2:0] = 010
-#define POSIVITE 0xFFF9 // psr[2:0] = 001
+#define NEGATIVE (1 << 2) // psr[2:0] = 100
+#define ZERO     (1 << 1) // psr[2:0] = 010
+#define POSIVITE (1 << 0) // psr[2:0] = 001
 
 #define OP_BR   0x0 // 0000
 #define OP_ADD  0x1 // 0001
@@ -38,16 +38,16 @@ enum tv {
     TV_HALT
 };
 
-lc3 *vm_new(const char *prog, size_t size)
+lc3 *vm_new(const char *prog, size_t size, u16 start_pc)
 {
     lc3 *vm = malloc(sizeof(lc3));
     if (!vm) ERR("vm malloc");
 
     memset(vm->ram, 0, sizeof(vm->ram));
-    memcpy(vm->ram + PROG_LOAD_ADDR, prog, size);
+    memcpy(vm->ram + start_pc, prog, size);
     for (int i = 0; i < 8; i++) vm->r[i] = 0;
     vm->_size = (size - 1) / 2 + 1;
-    vm->pc    = PROG_LOAD_ADDR;
+    vm->pc    = start_pc;
     vm->psr   = 0x8001;
     vm->sp    = &vm->r[6];
     vm->kbsr  = &vm->ram[KBSR_OFF];
@@ -58,15 +58,47 @@ lc3 *vm_new(const char *prog, size_t size)
     return vm;
 }
 
+static u16 check_key()
+{
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(STDIN_FILENO, &readfds); 
+
+    struct timeval timeout;
+    /* nonblock */
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+
+    return select(1, &readfds, NULL, NULL, &timeout);
+}
+
+static u16 mem_read(lc3 *vm, u16 addr)
+{
+    if (addr == KBSR_OFF) {
+        if (check_key()) {
+            *vm->kbsr = (1 << 15);
+            *vm->kbdr = fgetc(stdin);
+        } else {
+            *vm->kbsr = 0;
+        }
+    }
+    return vm->ram[addr];
+}
+
+static void mem_write(lc3 *vm, u16 addr, u16 val)
+{
+    vm->ram[addr] = val;
+}
+
 /* set condition codes */
 static void setcc(lc3 *vm, u16 result)
 {
     if (BIT(result, 15)) 
-        vm->psr = vm->psr & NEGATIVE;
+        vm->psr = (vm->psr & 0xFFF8) | NEGATIVE;
     else if (result == 0)
-        vm->psr = vm->psr & ZERO;
+        vm->psr = (vm->psr & 0xFFF8) | ZERO;
     else 
-        vm->psr = vm->psr & POSIVITE;
+        vm->psr = (vm->psr & 0xFFF8) | POSIVITE;
 }
 
 static void op_add(lc3 *vm, u16 inst)
@@ -132,8 +164,8 @@ static void op_ld(lc3 *vm, u16 inst)
     u16 *dr = &vm->r[FIELD(inst, 11, 9)];
     u16 pc_off = FIELD(inst, 8, 0);
     u16 addr = vm->pc + SEXT(pc_off, 9);
-    *dr = vm->ram[addr];
-    setcc(vm, addr);
+    *dr = mem_read(vm, addr);
+    setcc(vm, *dr);
 }
 
 static void op_ldi(lc3 *vm, u16 inst)
@@ -141,9 +173,9 @@ static void op_ldi(lc3 *vm, u16 inst)
     u16 *dr = &vm->r[FIELD(inst, 11, 9)];
     u16 pc_off = FIELD(inst, 8, 0);
     u16 addr1 = vm->pc + SEXT(pc_off, 9);
-    u16 addr2 = vm->ram[addr1];
-    *dr = vm->ram[addr2];
-    setcc(vm, addr1);
+    u16 addr2 = mem_read(vm, addr1);
+    *dr = mem_read(vm, addr2);
+    setcc(vm, *dr);
 }
 
 static void op_ldr(lc3 *vm, u16 inst)
@@ -152,15 +184,15 @@ static void op_ldr(lc3 *vm, u16 inst)
     u16 off = FIELD(inst, 5, 0);
     u16 baser = vm->r[FIELD(inst, 8, 6)];
     u16 addr = baser + SEXT(off, 6);
-    *dr = vm->ram[addr];
-    setcc(vm, addr);
+    *dr = mem_read(vm, addr);
+    setcc(vm, *dr);
 }
 
 static void op_lea(lc3 *vm, u16 inst)
 {
     u16 *dr = &vm->r[FIELD(inst, 11, 9)];
     u16 pc_off = FIELD(inst, 8, 0);
-    *dr= vm->pc + SEXT(pc_off, 9);
+    *dr = vm->pc + SEXT(pc_off, 9);
     setcc(vm, *dr);
 }
 
@@ -190,7 +222,7 @@ static void op_st(lc3 *vm, u16 inst)
     u16 sr = vm->r[FIELD(inst, 11, 9)];
     u16 pc_off = FIELD(inst, 8, 0);
     u16 addr = vm->pc + SEXT(pc_off, 9);
-    vm->ram[addr] = sr;
+    mem_write(vm, addr, sr);
 }
 
 static void op_sti(lc3 *vm, u16 inst)
@@ -198,8 +230,8 @@ static void op_sti(lc3 *vm, u16 inst)
     u16 sr = vm->r[FIELD(inst, 11, 9)];
     u16 pc_off = FIELD(inst, 8, 0);
     u16 addr1 = vm->pc + SEXT(pc_off, 9);
-    u16 addr2 = vm->ram[addr1];
-    vm->ram[addr2] = sr;
+    u16 addr2 = mem_read(vm, addr1);
+    mem_write(vm, addr2, sr);
 }
 
 static void op_str(lc3 *vm, u16 inst)
@@ -207,8 +239,8 @@ static void op_str(lc3 *vm, u16 inst)
     u16 sr = vm->r[FIELD(inst, 11, 9)];
     u16 off = FIELD(inst, 5, 0);
     u16 baser = vm->r[FIELD(inst, 8, 6)];
-    u16 addr = baser+ SEXT(off, 6);
-    vm->ram[addr] = sr;
+    u16 addr = baser + SEXT(off, 6);
+    mem_write(vm, addr, sr);
 }
 
 /* trap service routines (tsr) */
@@ -216,31 +248,31 @@ static void tsr_getc(lc3 *vm)
 {
     u16 ch = fgetc(stdin);
     vm->r[0] = ch & 0xFF;
-    *vm->kbsr |= 0x8000;
-    *vm->kbdr = ch & 0xFF;
+    setcc(vm, vm->r[0]);
 }
 
 static void tsr_out(lc3 *vm)
 {
     u16 ch = vm->r[0] & 0xFF;
     fputc(ch, stdout);
+    fflush(stdout);
 }
 
 static void tsr_in(lc3 *vm)
 {
-    fputs("Enter character: ", stdout);
+    fputs("Enter a character: ", stdout);
     u16 ch = fgetc(stdin);
     fputc(ch, stdout);
     vm->r[0] = ch & 0xFF;
-    *vm->kbsr |= 0x8000;
-    *vm->kbdr = ch & 0xFF;
+    setcc(vm, vm->r[0]);
 }
 
 static void tsr_halt(lc3 *)
 {
-    exit(0);
     fputs("Halt......", stdout);
+    fflush(stdout);
     fgetc(stdin);
+    exit(0);
 }
 
 static void tsr_puts(lc3 *vm)
@@ -249,6 +281,7 @@ static void tsr_puts(lc3 *vm)
     u16 ch;
     while ((ch = vm->ram[addr++]) != 0)
         fputc(ch, stdout);
+    fflush(stdout);
 }
 
 static void tsr_putsp(lc3 *vm)
@@ -264,6 +297,7 @@ static void tsr_putsp(lc3 *vm)
         fputc(ch, stdout);
         addr++;
     }
+    fflush(stdout);
 }
 
 static void op_trap(lc3 *vm, u16 inst)
